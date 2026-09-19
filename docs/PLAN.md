@@ -53,6 +53,16 @@ opción con tipo, rango, valor por defecto y ayuda. La API lo publica en
 `GET /api/capabilities` y el frontend **genera el formulario a partir de ahí**, así que
 agregar una opción nueva es una sola entrada en el catálogo.
 
+### Adaptación a la versión instalada
+
+La superficie del CLI cambia entre versiones de Demucs: la 4.0.1 publicada **no
+tiene** `--other-method` y su `--clip-mode` solo acepta `rescale` y `clamp`,
+mientras que la rama de desarrollo agrega ambos. El servidor parsea
+`demucs --help` una vez y con eso marca lo no disponible en `/api/capabilities`,
+lo omite al construir el comando, recorta los presets afectados y rechaza con un
+motivo legible cualquier pedido que lo use. Así el wrapper sirve tanto la versión
+publicada como una más nueva sin cambios de código.
+
 ## 4. Funcionalidades de la app
 
 - Subida múltiple (batch) con drag & drop; validación de tamaño/extensión.

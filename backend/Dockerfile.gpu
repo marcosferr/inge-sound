@@ -1,0 +1,30 @@
+# Imagen con CUDA. Requiere NVIDIA Container Toolkit en el host.
+FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
+
+ENV PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    DEBIAN_FRONTEND=noninteractive \
+    TORCH_HOME=/models \
+    INGE_DATA_DIR=/data
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        python3.11 python3-pip ffmpeg libsndfile1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --index-url https://download.pytorch.org/whl/cu121 \
+        torch==2.2.2 torchaudio==2.2.2 \
+    && pip install -r requirements.txt
+
+COPY app ./app
+
+RUN mkdir -p /data /models && useradd --create-home --uid 1000 inge \
+    && chown -R inge:inge /data /models /app
+USER inge
+
+EXPOSE 8000
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

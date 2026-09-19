@@ -1,0 +1,8 @@
+# Dependencias del servicio HTTP. Sin torch ni demucs: los tests usan un Demucs
+# simulado, así que CI instala solo esto y corre en segundos.
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.20
+pydantic==2.11.9
+pydantic-settings==2.11.0
+filelock==3.19.1

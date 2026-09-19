@@ -1,0 +1,52 @@
+# Overlay para GPU + cola distribuida con Celery y Redis.
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Requiere NVIDIA Container Toolkit en el host:
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    restart: unless-stopped
+
+  api:
+    build:
+      dockerfile: Dockerfile.gpu
+    environment:
+      INGE_QUEUE_BACKEND: celery
+      INGE_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      - redis
+
+  # Los workers se escalan aparte de la API: `docker compose up --scale worker=2`.
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gpu
+    command:
+      - celery
+      - -A
+      - app.celery_app.celery
+      - worker
+      - --loglevel=info
+      - --concurrency=1
+    environment:
+      INGE_DATA_DIR: /data
+      INGE_QUEUE_BACKEND: celery
+      INGE_REDIS_URL: redis://redis:6379/0
+      INGE_JOB_TIMEOUT_SECONDS: ${INGE_JOB_TIMEOUT_SECONDS:-10800}
+      TORCH_HOME: /models
+    volumes:
+      - data:/data
+      - models:/models
+    depends_on:
+      - redis
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
