@@ -1,0 +1,6 @@
+# node_modules del host rompe el build: npm ci instala binarios nativos de Linux
+# y el COPY posterior los pisaría con los de la máquina de desarrollo.
+node_modules/
+dist/
+*.tsbuildinfo
+.vite/

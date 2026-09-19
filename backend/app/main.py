@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
+import os
+import signal
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -41,6 +44,7 @@ async def lifespan(app: FastAPI):
     finally:
         if janitor:
             janitor.cancel()
+        terminate_running_jobs()
         queue.shutdown()
 
 
@@ -55,6 +59,38 @@ async def _janitor() -> None:
         except Exception:  # noqa: BLE001 - the janitor must never die
             log.exception("Fallo al limpiar trabajos vencidos")
         await asyncio.sleep(interval)
+
+
+def terminate_running_jobs() -> int:
+    """Stop the Demucs processes this server started, on the way down.
+
+    ``start_new_session=True`` (needed to group-kill on cancel) also means the
+    children survive uvicorn exiting, so outside a container they would keep
+    burning cores or GPU with nothing tracking them. Only the in-process pool's
+    children are ours to kill; Celery workers own theirs.
+    """
+    from .schemas import Job, JobStatus
+
+    if settings.queue_backend != "thread":
+        return 0
+
+    stopped = 0
+    for job in store.iter_jobs():
+        if job.status is not JobStatus.running or not job.pid:
+            continue
+        try:
+            os.killpg(os.getpgid(job.pid), signal.SIGTERM)
+            stopped += 1
+            log.info("Demucs del trabajo %s detenido (pid %s)", job.id, job.pid)
+        except (ProcessLookupError, PermissionError, OSError):
+            continue  # already gone, or not ours any more
+
+        def mutate(current: Job) -> None:
+            current.pid = None
+
+        with contextlib.suppress(Exception):
+            store.update(job.id, mutate)
+    return stopped
 
 
 def reconcile_orphans() -> int:

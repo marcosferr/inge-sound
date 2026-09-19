@@ -47,7 +47,9 @@ export const api = {
 
   getJob: (id: string) => request<Job>(`/jobs/${id}`),
 
-  getLog: (id: string) => request<{ log: string }>(`/jobs/${id}/log`),
+  /** A multi-hour job's log runs to tens of MB, so only the tail is fetched. */
+  getLog: (id: string, tailBytes = 200_000) =>
+    request<{ log: string }>(`/jobs/${id}/log?tail_bytes=${tailBytes}`),
 
   cancelJob: (id: string) => request<Job>(`/jobs/${id}/cancel`, { method: 'POST' }),
 

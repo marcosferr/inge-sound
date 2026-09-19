@@ -137,7 +137,8 @@ def _ranged_file_response(
 
     if range_header:
         match = RANGE_RE.fullmatch(range_header.strip())
-        if match:
+        # "bytes=-" names no range at all; serve the whole body with a 200.
+        if match and (match.group(1) or match.group(2)):
             raw_start, raw_end = match.groups()
             if raw_start:
                 start = int(raw_start)

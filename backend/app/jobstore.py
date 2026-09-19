@@ -156,8 +156,16 @@ class JobStore:
     # --- logging -----------------------------------------------------------
 
     def append_log(self, job_id: str, text: str) -> None:
-        with self.log_path(job_id).open("a", encoding="utf-8", errors="replace") as handle:
-            handle.write(text)
+        """Append to a job's log, tolerating a job deleted mid-run.
+
+        The API can rmtree a running job's directory at any moment; the worker
+        must not die with a FileNotFoundError while reporting that.
+        """
+        try:
+            with self.log_path(job_id).open("a", encoding="utf-8", errors="replace") as handle:
+                handle.write(text)
+        except (FileNotFoundError, NotADirectoryError):
+            return
 
     def read_log(self, job_id: str, tail_bytes: int | None = None) -> str:
         path = self.log_path(job_id)

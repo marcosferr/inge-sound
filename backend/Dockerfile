@@ -16,7 +16,8 @@ WORKDIR /app
 
 # torch se instala primero desde el índice CPU para no traer las ruedas CUDA
 # (unos 2 GB de más).
-COPY requirements.txt ./
+# requirements.txt chains -r requirements-api.txt, so both must land here.
+COPY requirements*.txt ./
 RUN pip install --index-url https://download.pytorch.org/whl/cpu \
         torch==2.2.2 torchaudio==2.2.2 \
     && pip install -r requirements.txt

@@ -18,6 +18,16 @@ services:
       INGE_REDIS_URL: redis://redis:6379/0
     depends_on:
       - redis
+    # La API también necesita ver la GPU: /api/capabilities informa los
+    # dispositivos disponibles y sin esto diría "solo CPU" mientras los workers
+    # separan con CUDA, y la interfaz no dejaría elegir el dispositivo.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   # Los workers se escalan aparte de la API: `docker compose up --scale worker=2`.
   worker:

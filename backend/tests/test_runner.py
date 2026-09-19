@@ -199,3 +199,52 @@ def test_collect_stems_handles_a_flat_filename_template(tmp_path):
 
 def test_collect_stems_on_a_missing_directory(tmp_path):
     assert collect_stems(tmp_path / "nope", SeparationOptions()) == []
+
+
+# --- progress against real Demucs output -----------------------------------
+
+# Verbatim from a real run's job.log: Demucs downloads the checkpoint before it
+# says anything about the track, and that download has its own tqdm bar.
+DOWNLOAD_OUTPUT = [
+    b'Downloading: "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8.th"',
+    b"  0%|          | 0.00/80.2M [00:00<?, ?B/s]",
+    b" 44%|****      | 35.6M/80.2M [00:00<00:00, 136MB/s]",
+    b"100%|**********| 80.2M/80.2M [00:00<00:00, 141MB/s]",
+]
+
+
+def feed(tracker, lines):
+    from app.runner import PERCENT_RE, SEPARATING_RE
+
+    for line in lines:
+        match = SEPARATING_RE.search(line)
+        if match:
+            tracker.start_track(match.group(1).decode().strip())
+        found = PERCENT_RE.findall(line)
+        if found:
+            tracker.observe_percent(float(found[-1]))
+
+
+def test_checkpoint_download_does_not_move_the_progress_bar():
+    """Otherwise the job reads 99% from the first second of a fresh install."""
+    tracker = ProgressTracker(tracks_total=1, sub_models=1)
+    feed(tracker, DOWNLOAD_OUTPUT)
+
+    assert tracker.overall == 0.0
+    assert tracker.current_track is None
+
+    feed(tracker, [b"Separating track /in/song.wav", b" 20%|##   | 1.2/5.8 [00:01<00:04]"])
+    assert 15.0 <= tracker.overall <= 25.0
+
+
+def test_prose_percentages_are_not_progress():
+    tracker = ProgressTracker(tracks_total=1, sub_models=1)
+    feed(tracker, [b"Separating track /in/song.wav", b"warning: CPU at 87% load"])
+    assert tracker.overall == 0.0
+
+
+def test_percent_regex_requires_the_bar_delimiter():
+    from app.runner import PERCENT_RE
+
+    assert PERCENT_RE.findall(b" 42%|####  | 2.4/5.8") == [b"42"]
+    assert PERCENT_RE.findall(b"CPU at 87% load") == []

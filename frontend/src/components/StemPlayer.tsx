@@ -64,6 +64,13 @@ function TrackMixer({ job, track, stems }: { job: Job; track: string; stems: Ste
         </div>
       </div>
 
+      {player.failedStems > 0 && (
+        <p className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-xs text-amber-300">
+          {player.failedStems} pista{player.failedStems === 1 ? '' : 's'} no se pudo
+          reproducir. El resto de la mezcla sigue sonando; probá descargarla.
+        </p>
+      )}
+
       <input
         type="range"
         aria-label="Posición de reproducción"

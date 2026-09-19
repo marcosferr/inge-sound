@@ -165,7 +165,9 @@ export function JobCard({ job, onCancel, onRetry, onDelete }: Props) {
             </code>
           </div>
           <div>
-            <p className="mb-1 font-semibold uppercase tracking-wider text-slate-500">Log</p>
+            <p className="mb-1 font-semibold uppercase tracking-wider text-slate-500">
+              Log <span className="font-normal normal-case tracking-normal">(últimos 200 KB)</span>
+            </p>
             <pre className="max-h-64 overflow-auto whitespace-pre-wrap rounded-lg bg-black/40 p-2.5 font-mono text-[11px] leading-relaxed text-slate-400">
               {log ?? 'Cargando…'}
             </pre>

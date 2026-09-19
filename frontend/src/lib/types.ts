@@ -117,9 +117,3 @@ export interface JobList {
   limit: number
   offset: number
 }
-
-export const TERMINAL_STATUSES: JobStatus[] = ['completed', 'failed', 'cancelled']
-
-export function isTerminal(job: Job): boolean {
-  return TERMINAL_STATUSES.includes(job.status)
-}

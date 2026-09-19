@@ -7,15 +7,19 @@ ENV PYTHONUNBUFFERED=1 \
     TORCH_HOME=/models \
     INGE_DATA_DIR=/data
 
+# Se usa el python3 de la distro (3.10) a propósito: el python3-pip de Ubuntu
+# 22.04 apunta a 3.10, así que instalar además python3.11 dejaría torch en un
+# intérprete y ejecutaría el otro.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3.11 python3-pip ffmpeg libsndfile1 \
+        python3 python3-pip ffmpeg libsndfile1 \
     && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3.11 /usr/bin/python
+    && ln -sf /usr/bin/python3 /usr/bin/python
 
 WORKDIR /app
 
-COPY requirements.txt ./
+# requirements.txt chains -r requirements-api.txt, so both must land here.
+COPY requirements*.txt ./
 RUN pip install --index-url https://download.pytorch.org/whl/cu121 \
         torch==2.2.2 torchaudio==2.2.2 \
     && pip install -r requirements.txt

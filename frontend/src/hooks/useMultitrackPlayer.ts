@@ -19,6 +19,20 @@ export interface TrackState {
  */
 const DRIFT_TOLERANCE = 0.08
 
+/**
+ * Browsers cap AudioContexts at about six per document, and a job list can show
+ * far more mixers than that, so every mixer shares one context. It is never
+ * closed: closing it would silence the mixers still mounted.
+ */
+let sharedContext: AudioContext | null = null
+
+function audioContext(): AudioContext {
+  if (!sharedContext || sharedContext.state === 'closed') {
+    sharedContext = new AudioContext()
+  }
+  return sharedContext
+}
+
 export function useMultitrackPlayer(jobId: string, stems: StemFile[]) {
   const elements = useRef(new Map<string, HTMLAudioElement>())
   const gains = useRef(new Map<string, GainNode>())
@@ -29,24 +43,29 @@ export function useMultitrackPlayer(jobId: string, stems: StemFile[]) {
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
   const [states, setStates] = useState<Record<string, TrackState>>({})
+  const [failedStems, setFailedStems] = useState(0)
 
   const stemIds = useMemo(() => stems.map((stem) => stem.id).join('|'), [stems])
 
   // Build the graph whenever the stem set changes.
   useEffect(() => {
-    const audioContext = new AudioContext()
-    context.current = audioContext
+    const ctx = audioContext()
+    context.current = ctx
     const localElements = new Map<string, HTMLAudioElement>()
     const localGains = new Map<string, GainNode>()
+    const localSources: MediaElementAudioSourceNode[] = []
     const initial: Record<string, TrackState> = {}
 
     stems.forEach((stem) => {
       const audio = new Audio(api.stemUrl(jobId, stem))
       audio.crossOrigin = 'anonymous'
-      audio.preload = 'auto'
-      const gain = audioContext.createGain()
-      audioContext.createMediaElementSource(audio).connect(gain)
-      gain.connect(audioContext.destination)
+      // 'auto' would download every stem of every listed job on render.
+      audio.preload = 'metadata'
+      const gain = ctx.createGain()
+      const source = ctx.createMediaElementSource(audio)
+      source.connect(gain)
+      gain.connect(ctx.destination)
+      localSources.push(source)
 
       audio.addEventListener('loadedmetadata', () => {
         setDuration((current) => Math.max(current, audio.duration || 0))
@@ -68,13 +87,18 @@ export function useMultitrackPlayer(jobId: string, stems: StemFile[]) {
     setCurrentTime(0)
     setDuration(0)
     setPlaying(false)
+    setFailedStems(0)
 
     return () => {
       localElements.forEach((audio) => {
         audio.pause()
-        audio.src = ''
+        // `src = ''` resolves against the document URL, which makes the element
+        // fetch index.html and fail to decode it. This actually detaches it.
+        audio.removeAttribute('src')
+        audio.load()
       })
-      void audioContext.close()
+      localSources.forEach((source) => source.disconnect())
+      localGains.forEach((gain) => gain.disconnect())
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId, stemIds])
@@ -111,12 +135,18 @@ export function useMultitrackPlayer(jobId: string, stems: StemFile[]) {
 
   const play = useCallback(async () => {
     if (context.current?.state === 'suspended') await context.current.resume()
-    const leader = [...elements.current.values()][0]
+    const all = [...elements.current.values()]
+    const leader = all[0]
     const from = leader?.currentTime ?? 0
-    elements.current.forEach((audio) => {
+    all.forEach((audio) => {
       audio.currentTime = from
     })
-    await Promise.all([...elements.current.values()].map((audio) => audio.play()))
+    // allSettled, not all: if one stem rejects (a seek aborting its load, a
+    // decode failure) the others are already audible, so the transport has to
+    // start regardless or the clock never runs and the button stays on play.
+    const results = await Promise.allSettled(all.map((audio) => audio.play()))
+    const failed = results.filter((result) => result.status === 'rejected').length
+    setFailedStems(failed)
     setPlaying(true)
   }, [])
 
@@ -169,6 +199,7 @@ export function useMultitrackPlayer(jobId: string, stems: StemFile[]) {
     currentTime,
     duration,
     states,
+    failedStems,
     play,
     pause,
     toggle,

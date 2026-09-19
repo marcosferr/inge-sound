@@ -112,7 +112,9 @@ async def create_job(
                     name=target.stem,
                     original_filename=upload.filename or name,
                     size_bytes=written,
-                    duration_seconds=probe.probe_duration(target),
+                    # ffprobe can take seconds per file; on the event loop that
+                    # would stall every SSE stream and the health check with it.
+                    duration_seconds=await asyncio.to_thread(probe.probe_duration, target),
                 )
             )
     except HTTPException:
@@ -140,7 +142,7 @@ async def _stream_to_disk(upload: UploadFile, target: Path) -> int:
                     status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                     f"'{upload.filename}' supera el límite de {settings.max_upload_mb} MB.",
                 )
-            handle.write(chunk)
+            await asyncio.to_thread(handle.write, chunk)
     if written == 0:
         target.unlink(missing_ok=True)
         raise HTTPException(

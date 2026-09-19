@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { api } from '../lib/api'
-import { isTerminal, type Job } from '../lib/types'
+import type { Job } from '../lib/types'
 
 const POLL_MS = 2000
+
+/**
+ * Browsers allow six concurrent HTTP/1.1 connections per origin. Each open SSE
+ * stream holds one for as long as its job runs, so streaming every unfinished
+ * job would starve the polling, the stem playback and the downloads. Queued
+ * jobs barely change, so only the running ones get a stream and polling covers
+ * the rest.
+ */
+const MAX_STREAMS = 3
 
 /**
  * Keeps the job list fresh.
@@ -46,11 +55,14 @@ export function useJobs() {
     return () => clearInterval(timer)
   }, [refresh])
 
-  // One SSE stream per in-flight job, closed as soon as it settles.
+  // One SSE stream per running job, capped, closed as soon as it settles.
   useEffect(() => {
     const open = streams.current
+    const streamable = new Set(
+      jobs.filter((job) => job.status === 'running').slice(0, MAX_STREAMS).map((job) => job.id),
+    )
     for (const job of jobs) {
-      if (isTerminal(job) || open.has(job.id)) continue
+      if (!streamable.has(job.id) || open.has(job.id)) continue
       const source = new EventSource(api.eventsUrl(job.id))
       open.set(job.id, source)
       source.addEventListener('job', (event) => {
@@ -72,8 +84,7 @@ export function useJobs() {
       }
     }
     for (const [id, source] of open) {
-      const job = jobs.find((item) => item.id === id)
-      if (!job || isTerminal(job)) {
+      if (!streamable.has(id)) {
         source.close()
         open.delete(id)
       }

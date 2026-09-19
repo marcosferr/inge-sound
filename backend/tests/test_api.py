@@ -294,3 +294,53 @@ def test_restart_leaves_celery_jobs_alone(store, monkeypatch):
 
     assert reconcile_orphans() == 0
     assert store.get(running.id).status is JobStatus.running
+
+
+def test_shutdown_kills_the_demucs_process_it_started(store, monkeypatch):
+    """The child is in its own session, so uvicorn exiting does not stop it."""
+    import subprocess
+    import sys
+    import time
+
+    from app.config import settings
+    from app.main import terminate_running_jobs
+
+    monkeypatch.setattr(settings, "queue_backend", "thread")
+    child = subprocess.Popen(  # noqa: S603
+        [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True
+    )
+    job = store.create(SeparationOptions())
+
+    def mark(current):
+        current.status = JobStatus.running
+        current.pid = child.pid
+
+    store.update(job.id, mark)
+
+    try:
+        assert terminate_running_jobs() == 1
+        for _ in range(100):
+            if child.poll() is not None:
+                break
+            time.sleep(0.05)
+        assert child.poll() is not None, "el proceso hijo sobrevivió al apagado"
+        assert store.get(job.id).pid is None
+    finally:
+        if child.poll() is None:  # pragma: no cover
+            child.kill()
+            child.wait()
+
+
+def test_shutdown_leaves_celery_children_alone(store, monkeypatch):
+    from app.config import settings
+    from app.main import terminate_running_jobs
+
+    monkeypatch.setattr(settings, "queue_backend", "celery")
+    job = store.create(SeparationOptions())
+
+    def mark(current):
+        current.status = JobStatus.running
+        current.pid = 999_999
+
+    store.update(job.id, mark)
+    assert terminate_running_jobs() == 0
