@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import io
 import struct
 import sys
@@ -24,9 +25,11 @@ def isolated_data_dir(tmp_path, monkeypatch):
 
     fresh = jobstore.JobStore(settings.jobs_dir)
     monkeypatch.setattr(jobstore, "store", fresh)
-    for module in ("app.routers.jobs", "app.routers.files", "app.worker"):
-        if module in sys.modules:
-            monkeypatch.setattr(sys.modules[module], "store", fresh, raising=False)
+    # Import before patching so the rebinding does not depend on which test ran
+    # first: modules that do `from .jobstore import store` keep their own name.
+    for module in ("app.routers.jobs", "app.routers.files", "app.worker", "app.main"):
+        importlib.import_module(module)
+        monkeypatch.setattr(sys.modules[module], "store", fresh, raising=False)
     yield fresh
 
 

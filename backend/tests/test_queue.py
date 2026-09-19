@@ -12,19 +12,23 @@ def test_thread_backend_runs_the_job(store, monkeypatch):
     monkeypatch.setattr(settings, "queue_backend", "thread")
     job = store.create(SeparationOptions())
 
+    import threading
+
     ran: list[str] = []
-    monkeypatch.setattr(queue, "execute_job", ran.append)
+    done = threading.Event()
+
+    def record(job_id: str) -> None:
+        ran.append(job_id)
+        done.set()
+
+    monkeypatch.setattr(queue, "execute_job", record)
 
     queue.submit(job.id)
-    queue.shutdown()
-
-    # shutdown() waits for nothing, so give the pool a moment to pick it up.
-    import time
-
-    for _ in range(50):
-        if ran:
-            break
-        time.sleep(0.02)
+    try:
+        # shutdown() cancels pending futures, so wait for the run before it.
+        assert done.wait(timeout=10), "el pool nunca ejecutó el trabajo"
+    finally:
+        queue.shutdown()
     assert ran == [job.id]
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from app.schemas import JobStatus
+from app.schemas import JobStatus, SeparationOptions
 from tests.conftest import make_wav
 
 
@@ -263,3 +263,34 @@ def test_options_the_host_cannot_run_are_refused_with_a_reason(client, wav_bytes
 def test_the_same_options_are_accepted_on_a_newer_demucs(client, wav_bytes, modern_demucs):
     response = upload(client, wav_bytes, two_stems="vocals", other_method="minus")
     assert response.status_code == 201
+
+
+# --- recovery after a restart ----------------------------------------------
+
+
+def test_restart_fails_jobs_the_in_process_pool_was_running(store, monkeypatch, wav_bytes):
+    from app.config import settings
+    from app.main import reconcile_orphans
+
+    monkeypatch.setattr(settings, "queue_backend", "thread")
+    running = store.create(SeparationOptions())
+    store.update(running.id, lambda job: setattr(job, "status", JobStatus.running))
+    queued = store.create(SeparationOptions())
+
+    assert reconcile_orphans() == 1
+    assert store.get(running.id).status is JobStatus.failed
+    assert "se reinició" in store.get(running.id).error
+    assert store.get(queued.id).status is JobStatus.queued
+
+
+def test_restart_leaves_celery_jobs_alone(store, monkeypatch):
+    """Celery workers outlive the API; failing their runs would be a lie."""
+    from app.config import settings
+    from app.main import reconcile_orphans
+
+    monkeypatch.setattr(settings, "queue_backend", "celery")
+    running = store.create(SeparationOptions())
+    store.update(running.id, lambda job: setattr(job, "status", JobStatus.running))
+
+    assert reconcile_orphans() == 0
+    assert store.get(running.id).status is JobStatus.running

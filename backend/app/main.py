@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import queue
 from .config import settings
-from .jobstore import store
+from .jobstore import store, utcnow
 from .routers import capabilities, files, jobs
 
 logging.basicConfig(
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     janitor = None
     if settings.cleanup_interval_minutes > 0:
         janitor = asyncio.create_task(_janitor())
-    _requeue_orphans()
+    reconcile_orphans()
     try:
         yield
     finally:
@@ -57,22 +57,38 @@ async def _janitor() -> None:
         await asyncio.sleep(interval)
 
 
-def _requeue_orphans() -> None:
-    """Mark jobs left 'running' by a crash, so the UI doesn't wait forever."""
+def reconcile_orphans() -> int:
+    """Fail jobs whose worker died, so the UI does not wait forever.
+
+    Only safe with the in-process pool: there, a restart really did kill every
+    separation. With Celery the workers outlive the API, so a restart would
+    wrongly fail runs that are still going — those reconcile themselves when the
+    worker writes its result. Returns how many jobs were marked failed.
+    """
     from .schemas import Job, JobStatus
 
-    for job in store.iter_jobs():
-        if job.status is JobStatus.running:
-            def mutate(current: Job) -> None:
-                current.status = JobStatus.failed
-                current.error = "El servidor se reinició mientras el trabajo corría."
-                current.pid = None
+    if settings.queue_backend != "thread":
+        return 0
 
-            try:
-                store.update(job.id, mutate)
-                log.warning("Trabajo %s marcado como fallido tras reinicio", job.id)
-            except Exception:  # noqa: BLE001
-                log.exception("No se pudo reconciliar el trabajo %s", job.id)
+    reconciled = 0
+    for job in store.iter_jobs():
+        if job.status is not JobStatus.running:
+            continue
+
+        def mutate(current: Job) -> None:
+            current.status = JobStatus.failed
+            current.error = "El servidor se reinició mientras el trabajo corría."
+            current.pid = None
+            current.finished_at = utcnow()
+            current.progress.stage = "failed"
+
+        try:
+            store.update(job.id, mutate)
+            reconciled += 1
+            log.warning("Trabajo %s marcado como fallido tras reinicio", job.id)
+        except Exception:  # noqa: BLE001 - one bad job must not block startup
+            log.exception("No se pudo reconciliar el trabajo %s", job.id)
+    return reconciled
 
 
 def create_app() -> FastAPI:
