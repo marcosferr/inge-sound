@@ -1,0 +1,26 @@
+# --- API ---
+fastapi==0.118.0
+uvicorn[standard]==0.37.0
+python-multipart==0.0.20
+pydantic==2.11.9
+pydantic-settings==2.11.0
+filelock==3.19.1
+
+# --- motor de separación ---
+# Las versiones de torch están fijadas a propósito:
+#  * torchaudio >= 2.9 eliminó los backends clásicos y exige `torchcodec`, que
+#    demucs 4.0.1 no usa (falla con "TorchCodec is required for load_with_torchcodec").
+#  * demucs 4.0.1 y torch 2.2.x están compilados contra numpy 1.x.
+# Para GPU, instalá torch/torchaudio desde el índice CUDA (ver Dockerfile.gpu):
+#   pip install torch==2.2.2 torchaudio==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+torch==2.2.2
+torchaudio==2.2.2
+numpy<2
+demucs==4.0.1
+# Backend de lectura/escritura de audio que usa torchaudio. Sin esto, Demucs no
+# puede abrir ni siquiera un WAV. Para mp3/m4a/video hace falta además ffmpeg.
+soundfile==0.13.1
+
+# --- cola distribuida (opcional, INGE_QUEUE_BACKEND=celery) ---
+celery==5.5.3
+redis==6.4.0

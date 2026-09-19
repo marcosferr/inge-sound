@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-ink-950 text-slate-200 antialiased;
+    background-image:
+      radial-gradient(60rem 40rem at 15% -10%, rgba(45, 212, 191, 0.10), transparent),
+      radial-gradient(50rem 30rem at 95% 0%, rgba(129, 140, 248, 0.08), transparent);
+    background-attachment: fixed;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-ink-600;
+  }
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/5 bg-ink-900/70 shadow-xl shadow-black/30 backdrop-blur;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm
+           font-medium transition disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-ink-950 hover:bg-accent-soft;
+  }
+
+  .btn-ghost {
+    @apply btn border border-white/10 text-slate-300 hover:border-white/25 hover:text-white;
+  }
+
+  .btn-danger {
+    @apply btn border border-rose-500/30 text-rose-300 hover:bg-rose-500/10;
+  }
+
+  .field-label {
+    @apply mb-1 flex items-center justify-between text-xs font-medium uppercase
+           tracking-wide text-slate-400;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-white/10 bg-ink-800 px-3 py-2 text-sm text-slate-100
+           outline-none transition focus:border-accent/60 focus:ring-1 focus:ring-accent/40;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+}
+
+/* Range inputs need explicit styling to look consistent across browsers. */
+input[type='range'] {
+  @apply h-1.5 w-full cursor-pointer appearance-none rounded-full bg-ink-600;
+}
+input[type='range']::-webkit-slider-thumb {
+  @apply h-3.5 w-3.5 appearance-none rounded-full bg-accent shadow;
+}
+input[type='range']::-moz-range-thumb {
+  @apply h-3.5 w-3.5 rounded-full border-0 bg-accent;
+}

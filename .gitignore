@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Datos de la aplicación
+data/
+backend/data/
+*.log
+
+# Node
+node_modules/
+dist/
+.vite/
+
+# Entorno
+.env
+.env.local
+
+# Sistema
+.DS_Store
