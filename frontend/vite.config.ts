@@ -13,5 +13,11 @@ export default defineConfig({
       '/api': { target: apiTarget, changeOrigin: true },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+    },
+  },
   build: { outDir: 'dist', sourcemap: true },
 })

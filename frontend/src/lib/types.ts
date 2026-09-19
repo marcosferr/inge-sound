@@ -7,6 +7,8 @@ export type OptionType = 'enum' | 'int' | 'float' | 'bool' | 'string'
 export interface OptionChoice {
   value: string | number | boolean
   label: string
+  /** False when the installed Demucs rejects this value. */
+  supported?: boolean
 }
 
 /** One Demucs flag, as described by the backend catalog. */
@@ -24,6 +26,8 @@ export interface OptionSpec {
   group: string
   advanced: boolean
   depends_on: Record<string, unknown[]> | null
+  /** False when the installed Demucs does not have this flag. */
+  supported?: boolean
 }
 
 export interface ModelInfo {
@@ -42,6 +46,8 @@ export interface Preset {
   label: string
   description: string
   options: Record<string, unknown>
+  /** Option labels the server removed because this Demucs lacks the flag. */
+  dropped?: string[]
 }
 
 export interface Capabilities {

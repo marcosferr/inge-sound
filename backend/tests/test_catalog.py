@@ -110,3 +110,25 @@ def test_unsupported_reasons_only_flags_non_default_values(legacy_demucs):
 
 def test_unsupported_reasons_are_empty_on_a_newer_demucs(modern_demucs):
     assert catalog.unsupported_reasons({"other_method": "minus", "clip_mode": "none"}) == []
+
+
+def test_presets_drop_options_the_host_cannot_run(legacy_demucs):
+    """Otherwise the karaoke preset would set a flag the submit then rejects."""
+    karaoke = next(p for p in catalog.serialize_presets() if p["key"] == "karaoke")
+    assert "other_method" not in karaoke["options"]
+    assert karaoke["dropped"] == ["Cálculo del complemento"]
+    # The rest of the preset survives.
+    assert karaoke["options"]["two_stems"] == "vocals"
+    assert catalog.unsupported_reasons(karaoke["options"]) == []
+
+
+def test_presets_keep_everything_on_a_newer_demucs(modern_demucs):
+    karaoke = next(p for p in catalog.serialize_presets() if p["key"] == "karaoke")
+    assert karaoke["options"]["other_method"] == "minus"
+    assert karaoke["dropped"] == []
+
+
+def test_every_preset_is_submittable_as_served(legacy_demucs):
+    for preset in catalog.serialize_presets():
+        assert catalog.unsupported_reasons(preset["options"]) == []
+        SeparationOptions(**preset["options"])

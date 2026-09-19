@@ -29,7 +29,7 @@ def capabilities() -> Capabilities:
         models=catalog.serialize_models(),
         options=catalog.serialize_options(),
         option_groups=catalog.OPTION_GROUPS,
-        presets=catalog.PRESETS,
+        presets=catalog.serialize_presets(),
         devices=available,
         default_device=default,
         gpu_name=gpu_name,

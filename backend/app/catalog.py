@@ -500,6 +500,36 @@ def serialize_options() -> list[dict[str, Any]]:
     return payload
 
 
+def serialize_presets() -> list[dict[str, Any]]:
+    """Presets trimmed to what this host can run.
+
+    A preset that asked for a missing flag would be rejected on submit, which is
+    a dead button in the UI; dropping the key falls back to Demucs' own default
+    for it and the rest of the preset still applies.
+    """
+    from . import probe
+
+    payload: list[dict[str, Any]] = []
+    for preset in PRESETS:
+        options: dict[str, Any] = {}
+        dropped: list[str] = []
+        for key, value in preset["options"].items():
+            option = OPTIONS_BY_KEY.get(key)
+            if option is None:
+                options[key] = value
+                continue
+            usable = all(probe.flag_supported(f) for f in option.required_flags) and (
+                not option.choices_flag
+                or probe.choice_supported(option.choices_flag, str(value))
+            )
+            if usable:
+                options[key] = value
+            else:
+                dropped.append(option.label)
+        payload.append({**preset, "options": options, "dropped": dropped})
+    return payload
+
+
 def unsupported_reasons(values: dict[str, Any]) -> list[str]:
     """Human-readable reasons why ``values`` cannot run on this host.
 
