@@ -132,3 +132,11 @@ def test_every_preset_is_submittable_as_served(legacy_demucs):
     for preset in catalog.serialize_presets():
         assert catalog.unsupported_reasons(preset["options"]) == []
         SeparationOptions(**preset["options"])
+
+
+def test_piano_duo_preset_separates_piano_from_the_rest(legacy_demucs):
+    duo = next(p for p in catalog.serialize_presets() if p["key"] == "piano_duo")
+    assert duo["options"]["model"] == "htdemucs_6s"
+    assert duo["options"]["two_stems"] == "piano"
+    # Demucs 4.0.1 has no --other-method: the preset still runs, with the default.
+    assert catalog.unsupported_reasons(duo["options"]) == []
