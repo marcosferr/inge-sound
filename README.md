@@ -22,13 +22,40 @@ CLI está disponible en la API y en la interfaz.
   procesos paralelos, modo dos pistas (karaoke), formato de salida
   (WAV/FLAC/MP3), profundidad de bits, bitrate y preset de MP3, manejo de
   clipping y plantilla de nombres.
-- **Presets** para los casos comunes y modo avanzado para el resto.
+- **Presets** para los casos comunes y modo avanzado para el resto (ver
+  [Presets](#presets)).
 - **Lotes**: varios archivos por trabajo.
 - **Progreso real** mientras corre, con estimación de tiempo restante.
 - **Reproductor multipista** sincronizado, con volumen, mute y solo por pista.
 - **Descarga** individual o ZIP de todo el trabajo.
 - **Cancelar, reintentar y ver el log** completo del proceso.
 - **Retención automática**: los archivos se borran solos pasado el plazo.
+- **De pista a partitura**: una skill de Claude Code convierte un instrumento
+  solista separado (sobre todo violín) en MIDI, MusicXML y PDF (ver
+  [De pista a partitura](#de-pista-a-partitura)).
+
+### Presets
+
+| Preset | Modelo | Qué hace |
+|---|---|---|
+| Rápido | `htdemucs` | `shifts=0`, MP3. Para previsualizar. |
+| Equilibrado | `htdemucs` | Valores por defecto de Demucs. |
+| Máxima calidad | `htdemucs_ft` | `shifts=5`, `overlap=0.5`. Lento, pensado para GPU. |
+| Karaoke | `htdemucs` | Voz y acompañamiento. |
+| 6 pistas | `htdemucs_6s` | Voz, batería, bajo, guitarra, piano y resto. |
+| Piano + instrumento | `htdemucs_6s` | `--two-stems piano`: el piano en una pista y el solista (violín, flauta, voz…) con todo lo demás en otra. Para dúos. |
+
+### Qué instrumentos puede separar
+
+Demucs no deja elegir instrumentos libremente: cada modelo trae una lista fija
+de pistas. El que más tiene es `htdemucs_6s` (`vocals`, `drums`, `bass`,
+`guitar`, `piano`, `other`). Un violín, una flauta o un arpa van a parar a
+`other`. Si la grabación es un solista con piano, el preset **Piano +
+instrumento** deja al solista en una pista propia (`no_piano`).
+
+Para separar un instrumento que Demucs no conoce hay dos caminos: entrenar un
+modelo propio y cargarlo con `--repo`/`--sig` (ya soportado), o sumar otro motor
+de separación que acepte el instrumento por nombre (no implementado).
 
 ### Se adapta a la versión de Demucs instalada
 
@@ -202,6 +229,56 @@ Todas opcionales; los valores por defecto son los de Demucs.
 
 ---
 
+## De pista a partitura
+
+La skill [`violin-a-partitura`](.claude/skills/violin-a-partitura/SKILL.md)
+toma la pista de un instrumento solista y la convierte en partitura. Corre sola
+desde Claude Code ("pasame el violín a partitura") o a mano:
+
+```bash
+PY=/ruta/venv/bin/python MUSC_DIR=/ruta/violin-transcription \
+  .claude/skills/violin-a-partitura/scripts/transcribir.sh \
+  stems/other.wav salida/ "6/8" "" "Título – violín"
+```
+
+Pasos:
+
+1. **ffmpeg**: mono a 44,1 kHz y pasa-altos a 180 Hz, para reducir el sangrado
+   de graves.
+2. **[MUSC](https://github.com/MTG/violin-transcription)**: audio a MIDI con un
+   modelo entrenado en violín (ISMIR 2023).
+3. **[beat_this](https://github.com/CPJKU/beat_this)**: pulsos y compases,
+   calculados sobre la mezcla y no sobre la pista sola, que pierde pulsos.
+4. **`clean_midi.py`**: deja una sola línea melódica, quita los clusters de
+   semitono del vibrato y las notas graves que vienen del piano, y une los
+   fragmentos de una misma nota. Cada regla se ajusta por flag.
+5. **`midi2score.py`**: cuantiza sobre la grilla de pulsos (sigue el rubato),
+   pone armadura y compás, y escribe las alteraciones según la tonalidad.
+6. **MuseScore 4**: exporta el PDF.
+
+El resultado es un borrador para corregir en MuseScore: el ritmo es aproximado
+y no lleva arcos, articulaciones ni dinámicas. La instalación (incluido un
+parche para que MUSC corra sin GPU NVIDIA) y los límites están en el
+[SKILL.md](.claude/skills/violin-a-partitura/SKILL.md). MUSC es AGPL-3.0 y se
+usa como clon externo, sin copiar su código a este repo.
+
+### Ejemplo: "Mis noches sin ti"
+
+En [`examples/mis-noches-sin-ti/`](examples/mis-noches-sin-ti/) está el
+resultado completo para una guarania de violín y piano (3:28): las pistas
+separadas en MP3, el MIDI original y el limpio, los pulsos y la partitura en
+MusicXML y [PDF](examples/mis-noches-sin-ti/violin_limpia.pdf).
+
+Tiempos en un Mac con Apple Silicon:
+
+| Paso | Tiempo |
+|---|---|
+| Separación con `htdemucs_6s` en MPS (`shifts=2`) | ~30 s |
+| MUSC en CPU | ~50 s |
+| beat_this, limpieza, cuantización y PDF | ~25 s |
+
+---
+
 ## Configuración
 
 Ver [`.env.example`](.env.example). Todas las variables llevan el prefijo `INGE_`.
@@ -228,7 +305,9 @@ dura la canción con `htdemucs` y `shifts=1`, y cuatro veces más con
 
 Palancas, de mayor a menor impacto:
 
-- **GPU** (`device: cuda`): el salto más grande, entre 10 y 20 veces.
+- **GPU** (`device: cuda`): el salto más grande, entre 10 y 20 veces. En Macs
+  con Apple Silicon, `device: mps` usa el GPU integrado: una canción de 3:28
+  con `htdemucs_6s` tarda unos 30 segundos.
 - **`shifts`**: multiplica directamente el tiempo. `0` para previsualizar.
 - **Modelo**: `htdemucs` es el equilibrio; `htdemucs_ft` corre cuatro redes.
 - **`jobs`**: en CPU, subirlo aprovecha más núcleos a costa de memoria.

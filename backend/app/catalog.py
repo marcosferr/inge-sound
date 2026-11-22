@@ -463,6 +463,21 @@ PRESETS: list[dict[str, Any]] = [
         "description": "Suma guitarra y piano a las cuatro pistas clásicas.",
         "options": {"model": "htdemucs_6s", "shifts": 1, "format": "wav"},
     },
+    {
+        "key": "piano_duo",
+        "label": "Piano + instrumento",
+        "description": (
+            "Para dúos de piano y un solista (violín, flauta, voz…). Separa el "
+            "piano y deja todo lo demás en otra pista, calculada por resta."
+        ),
+        "options": {
+            "model": "htdemucs_6s",
+            "two_stems": "piano",
+            "other_method": "minus",
+            "shifts": 2,
+            "format": "wav",
+        },
+    },
 ]
 
 
